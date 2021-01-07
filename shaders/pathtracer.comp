@@ -1,0 +1,223 @@
+#version 460 core
+// Thread block dimensions
+#define SIZE_X 8
+#define SIZE_Y 8
+#define SIZE_Z 8
+
+// Intersectable types
+#define SPHERE_TYPE 0
+#define TRIANGLE_TYPE 1
+
+#define PHI 1.61803398874989484820459
+#define M_PI 3.1415926535897f
+
+layout (local_size_x = SIZE_X, local_size_y = SIZE_Y, local_size_z = SIZE_Z) in;
+
+layout (rgba32f, binding = 0) uniform image2D output_image;
+
+struct Intersectable {
+
+    // Whatever data is required to specify the intersectable.
+    // Interpretation of data depends on the type parameter,
+    // see intersect method for details.
+    vec4 a, b, c;
+    vec4 albedo;
+    float refIdx, diffusivity;
+
+    int type;
+
+};
+
+struct Ray {
+    vec3 origin, direction;
+};
+
+struct IntersectResult {
+
+    bool hit;
+    float t;
+    vec3 normal;
+    vec3 point;
+
+    vec3 albedo;
+    float refIdx, diffusivity;
+};
+
+
+// input scene specifications
+layout (std430, binding=1) buffer scene {
+
+	Intersectable objects[];
+
+};
+
+// parameters
+layout(std140, binding=2) uniform params {
+
+    int nx, ny, spp; // output resolution, samples per pixel
+    vec4 camPos, camDir, camUp, camRight; // camera position and orientation
+
+    int recursion_depth;
+    float tmin, tmax;
+
+    int nof_objects;
+
+    int seed;
+
+};
+
+// shared array to store the result of each sampler thread of each pixel.
+shared vec3 samples[SIZE_X * SIZE_Y * SIZE_Z];
+
+// PRNG state for each thread
+shared uint randomState[SIZE_X][SIZE_Y][SIZE_Z];
+
+const uint k = 1103515245U;  // GLIB C
+
+uvec3 hash(uvec3 x) {
+    x = ((x>>8U)^x.yzx)*k;
+    x = ((x>>8U)^x.yzx)*k;
+    x = ((x>>8U)^x.yzx)*k;
+
+    return x;
+}
+
+// sample a random real number from the interval [0, 1].
+float rand() {
+    uint s = randomState[gl_LocalInvocationID.x][gl_LocalInvocationID.y][gl_LocalInvocationID.z];
+
+    uint new = hash(gl_GlobalInvocationID.xyz * s).x;
+    randomState[gl_LocalInvocationID.x][gl_LocalInvocationID.y][gl_LocalInvocationID.z] = new;
+    return new * (1.0/float(0xffffffffU));
+}
+
+// sample a random point from a unit sphere.
+vec3 sampleSphere() {
+    float theta = 2 * M_PI * rand();
+    float psi = 2 * M_PI * (rand() - 0.5);
+    float r = sin(psi);
+    return vec3(r * cos(theta), r * sin(theta), cos(psi));
+}
+
+// Assumes ray direction is normalized.
+IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
+
+    IntersectResult res;
+    res.hit = false;
+
+    if (obj.type == SPHERE_TYPE) { // Sphere intersection
+        vec3 center = vec3(obj.a);
+        float radius = obj.b.x;
+
+        vec3 RC = ray.origin - center;
+        float b = 2 * dot(ray.direction, RC);
+        float c = dot(RC, RC) - radius * radius;
+        float D = b * b - 4 * c;
+        float x = 0;
+
+        if (D > 0) {
+            x = (-b - sqrt(D)) / 2; // smaller of the two roots
+            x = (x > tmin)? x: c/x; // choose larger root if the smaller is behind camera
+        }
+
+        if (x > tmin) {
+            res.hit = true;
+            res.t = x;
+            res.point = ray.origin + x * ray.direction;
+            res.normal = normalize(res.point - center);
+            res.albedo = obj.albedo.xyz;
+        }
+
+    } else if (obj.type == TRIANGLE_TYPE) { // Triangle intersection
+
+    }
+
+    return res;
+
+}
+
+Ray scatter(Ray incoming, IntersectResult intersect) {
+    Ray ray;
+    ray.origin = intersect.point;
+
+    // lambertian scattering
+    ray.direction = normalize(intersect.normal + sampleSphere());
+    return ray;
+}
+
+vec3 getBackgroundColor(Ray ray) {
+
+    const vec3 up = vec3(0, 0, 1);
+    const vec3 upColor = vec3(1.0, 1.0, 1.0);
+    const vec3 downColor = vec3(1.0, 1.0, 1.0);
+
+    float t = 0.5 * (dot(ray.direction, up) + 1);
+    return t*upColor + (1-t)*downColor;
+}
+
+Ray generateRay(ivec2 coords, ivec2 size) {
+
+    vec2 frame_coords = vec2(coords) - vec2(size)/2+ vec2(rand(), rand());
+    Ray ray;
+    ray.origin = camPos.xyz;
+    ray.direction = normalize(camDir.xyz + frame_coords.x * camRight.xyz + frame_coords.y * camUp.xyz);
+
+    return ray;
+}
+
+
+void main() {
+
+    int x = int(gl_LocalInvocationID.x);
+    int y = int(gl_LocalInvocationID.y);
+    int z = int(gl_LocalInvocationID.z);
+    int idx = x * SIZE_Y * SIZE_Z + y * SIZE_Z + z; // 1D local thread index
+    // initialize PRNG state
+    randomState[x][y][z] = seed;
+
+    ivec3 global_id = ivec3(gl_GlobalInvocationID.xyz); // global thread index
+
+    if (all(lessThan(global_id, ivec3(nx, ny, spp)))) {
+
+        Ray ray = generateRay(global_id.xy, ivec2(nx, ny)); // Initial (camera) ray
+        vec3 sample_color = vec3(1.0); // Initial color
+
+        IntersectResult best, candidate;
+
+
+        for (int d = 0; d < recursion_depth; d++) {
+
+            best.hit = false;
+            best.t = tmax;
+
+            for (int i = 0; i < nof_objects; i++) {
+
+                candidate = intersect(ray, objects[i], tmin, tmax);
+
+                if (candidate.hit && candidate.t < best.t) {
+                    best = candidate;
+                }
+            }
+
+            if (best.hit) {
+                sample_color *= best.albedo.xyz;
+                ray = scatter(ray, best);
+            } else {
+                sample_color *= getBackgroundColor(ray);
+                break;
+            }
+        }
+
+        samples[idx] = sample_color;
+
+        barrier(); // synchronize writing to shared memory
+
+        if (z==0) { // zeroth sampler of each pixel writes to output
+            int nof_samples = min(SIZE_Z, spp - global_id.z);
+            for (int i = 1; i < nof_samples; i++) {
+                samples[idx] += samples[idx + i];
+            }
+            imageStore(output_image, global_id.xy, vec4(samples[idx]/nof_samples, 1.0));
+        }
+    }
+}
