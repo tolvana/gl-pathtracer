@@ -19,7 +19,7 @@ Scene::Scene() {
     gl_Material glass = {
                        .color = glm::vec4(1.0),
                        .fuzz = 0.0,
-                       .ref_idx = 1.2,
+                       .ref_idx = 1.1,
                        .type = 2
     };
 
@@ -51,7 +51,7 @@ Scene::Scene() {
     };
 
     gl_Intersectable copper_sphere = {
-                               .a = glm::vec4(3, 2, 1, 0),
+                               .a = glm::vec4(2, 2, 1, 0),
                                .b = glm::vec4(0.9, 0, 0, 0),
                                .c = glm::vec4(0.0, 0, 0, 1),
                                .type = 0, // sphere
@@ -59,7 +59,7 @@ Scene::Scene() {
     };
 
     gl_Intersectable glass_sphere = {
-                               .a = glm::vec4(2, -3, 1, 0),
+                               .a = glm::vec4(0, 0, 3, 0),
                                .b = glm::vec4(2, 0, 0, 0),
                                .c = glm::vec4(0.0, 0, 0, 1),
                                .type = 0, // sphere
@@ -83,14 +83,16 @@ Scene::Scene() {
     params_ = {.nx = 1920,
                .ny = 1080,
                .spp = 64,
-               .camPos = glm::vec4(0.0, 0.0, 0.0, 0),
+               .camPos = glm::vec4(-3.0, 0.0, 0.0, 0),
                .camDir = glm::vec4(1.0, 0.0, 0.0, 0),
-               .camUp = 2 * (float)std::tan(90 * M_PI/360) / 1368 * glm::vec4(.0, .0, 1.0, 0),
-               .camRight = 2 * (float)std::tan(90 * M_PI/360) / 1368 * glm::vec4(0, -1, 0, 0),
+               .camUp = 2 * (float)std::tan(60 * M_PI/360) / 1368 * glm::vec4(.0, .0, 1.0, 0),
+               .camRight = 2 * (float)std::tan(60 * M_PI/360) / 1368 * glm::vec4(0, -1, 0, 0),
+               .aperture = 0.1,
+               .focal_distance = 6.0,
                .recursion_depth = 10,
                .tmin = 2e-2f,
                .tmax = 1e8f,
                .nof_objects = (int)objects_.size(),
-               .seed = 1
+               .seed = rand()
               };
 }

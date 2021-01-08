@@ -76,6 +76,7 @@ layout(std140, binding = 3) uniform params {
 
     int nx, ny, spp; // output resolution, samples per pixel
     vec4 camPos, camDir, camUp, camRight; // camera position and orientation
+    float aperture, focal_distance;
 
     int recursion_depth;
     float tmin, tmax;
@@ -187,12 +188,12 @@ Ray scatter(Ray incoming, IntersectResult intersect) {
         if (ref_idx * sine > 1.0 || rand() < schlick) {
             ray.direction = normalize(reflect(incoming.direction,
                                               intersect.normal)
-                                      + material.fuzz * sampleSphere());
+                                      );
         } else {
             ray.direction = normalize(refract(incoming.direction,
                                               intersect.normal,
                                               ref_idx)
-                                      + material.fuzz * sampleSphere());
+                                      );
             ray.inside = !incoming.inside;
         }
     }
@@ -213,10 +214,15 @@ vec3 getBackgroundColor(Ray ray) {
 
 Ray generateRay(ivec2 coords, ivec2 size) {
 
-    vec2 frame_coords = vec2(coords) - vec2(size)/2+ vec2(rand(), rand());
+    vec3 aperture_offset = aperture * (rand() * normalize(camRight.xyz)
+                              + rand() * normalize(camUp.xyz));
+    vec2 frame_coords = vec2(coords) - vec2(size)/2 + vec2(rand(), rand());
     Ray ray;
-    ray.origin = camPos.xyz;
-    ray.direction = normalize(camDir.xyz + frame_coords.x * camRight.xyz + frame_coords.y * camUp.xyz);
+    ray.origin = camPos.xyz + aperture_offset;
+    ray.direction = normalize(camDir.xyz
+                              + frame_coords.x * camRight.xyz
+                              + frame_coords.y * camUp.xyz
+                              - aperture_offset / focal_distance);
     ray.inside = false;
 
     return ray;

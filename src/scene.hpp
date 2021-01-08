@@ -26,6 +26,7 @@ struct PathTracerParams {
     int nx, ny, spp; // output resolution, samples per pixel
     int pad0; // padding for std140 layout compatibility
     glm::vec4 camPos, camDir, camUp, camRight; // camera position and orientation
+    float aperture, focal_distance;
 
     int recursion_depth;
     float tmin, tmax;

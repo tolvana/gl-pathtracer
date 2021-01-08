@@ -1,4 +1,3 @@
-
 #include "pathtracer.hpp"
 #include "windowcontext.hpp"
 
