@@ -1,13 +1,21 @@
 #version 460 core
+
 // Thread block dimensions
 #define SIZE_X 2
 #define SIZE_Y 2
 #define SIZE_Z 64
 
 // Intersectable types
-#define SPHERE_TYPE 0
-#define TRIANGLE_TYPE 1
+#define SPHERE 0
+#define TRIANGLE 1
 
+// Material types
+#define LAMBERTIAN 0
+#define METAL 1
+#define DIELECTRIC 2
+#define EMISSIVE 3
+
+// Mathematical constants
 #define PHI 1.61803398874989484820459
 #define M_PI 3.1415926535897f
 
@@ -28,13 +36,15 @@ struct Intersectable {
 
 struct Material {
 
-    vec4 albedo, illuminance;
-    float diffusivity, ref_idx;
+    vec4 color;
+    float fuzz, ref_idx;
+    int type;
 
 };
 
 struct Ray {
     vec3 origin, direction;
+    bool inside;
 };
 
 struct IntersectResult {
@@ -115,7 +125,7 @@ IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
     IntersectResult res;
     res.hit = false;
 
-    if (obj.type == SPHERE_TYPE) { // Sphere intersection
+    if (obj.type == SPHERE) { // Sphere intersection
         vec3 center = vec3(obj.a);
         float radius = obj.b.x;
 
@@ -134,11 +144,12 @@ IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
             res.hit = true;
             res.t = x;
             res.point = ray.origin + x * ray.direction;
-            res.normal = normalize(res.point - center);
             res.material_idx = obj.material_idx;
+            res.normal = normalize(res.point - center);
+            res.normal = (dot(res.normal, ray.direction) > 0.0)? -res.normal: res.normal;
         }
 
-    } else if (obj.type == TRIANGLE_TYPE) { // Triangle intersection
+    } else if (obj.type == TRIANGLE) { // Triangle intersection
 
     }
 
@@ -147,21 +158,54 @@ IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
 }
 
 Ray scatter(Ray incoming, IntersectResult intersect) {
+
     Ray ray;
     ray.origin = intersect.point;
 
-    // lambertian scattering
-    ray.direction = normalize(intersect.normal + sampleSphere());
-    return ray;
+    Material material = materials[intersect.material_idx];
 
+    if (material.type == LAMBERTIAN) {
+
+        ray.direction = normalize(intersect.normal + sampleSphere());
+
+    } else if (material.type == METAL) {
+
+        ray.direction = normalize(reflect(incoming.direction,
+                                          intersect.normal) + material.fuzz * sampleSphere());
+
+    } else if (material.type == DIELECTRIC) {
+
+        float ref_idx = incoming.inside? material.ref_idx: 1.0 / material.ref_idx;
+        float cosine = dot(-incoming.direction, intersect.normal);
+        float sine = sqrt(1 - cosine * cosine);
+
+        float r0 = pow((1 - ref_idx) / (1 + ref_idx), 2);
+        float schlick = r0 + (1 - r0) * pow(1 - cosine, 5);
+
+        // ray is reflected, either due to total internal reflection
+        // or randomly due to nonzero reflection coefficient
+        if (ref_idx * sine > 1.0 || rand() < schlick) {
+            ray.direction = normalize(reflect(incoming.direction,
+                                              intersect.normal)
+                                      + material.fuzz * sampleSphere());
+        } else {
+            ray.direction = normalize(refract(incoming.direction,
+                                              intersect.normal,
+                                              ref_idx)
+                                      + material.fuzz * sampleSphere());
+            ray.inside = !incoming.inside;
+        }
+    }
+
+    return ray;
 
 }
 
 vec3 getBackgroundColor(Ray ray) {
 
     const vec3 up = vec3(0, 0, 1);
-    const vec3 upColor = vec3(1.0, 1.0, 1.0);
-    const vec3 downColor = vec3(1.0, 1.0, 1.0);
+    const vec3 upColor = vec3(0.5, 0.5, 1.0);
+    const vec3 downColor = vec3(1.5, 1.5, 1.0);
 
     float t = 0.5 * (dot(ray.direction, up) + 1);
     return t*upColor + (1-t)*downColor;
@@ -173,6 +217,7 @@ Ray generateRay(ivec2 coords, ivec2 size) {
     Ray ray;
     ray.origin = camPos.xyz;
     ray.direction = normalize(camDir.xyz + frame_coords.x * camRight.xyz + frame_coords.y * camUp.xyz);
+    ray.inside = false;
 
     return ray;
 }
@@ -217,21 +262,24 @@ void main() {
                     }
                 }
 
-                if (best.hit) { // ray hits an object
-                    Material mat = materials[best.material_idx];
+                Material material = materials[best.material_idx];
 
-                    // Add illuminant contribution of this material (multiplied
-                    // by the total albedo from this point to camera) to final color
-                    sample_color += albedo * mat.illuminance.xyz;
+                if (best.hit && material.type != EMISSIVE) { // ray is scattered
 
                     // Stack contribution of this material with the total albedo
-                    albedo *= mat.albedo.xyz;
+                    albedo *= material.color.xyz;
 
                     ray = scatter(ray, best);
 
+                } else if (material.type == EMISSIVE) { // ray is absorbed by a black body
+                    // Add illuminant contribution of this material (multiplied
+                    // by the total albedo from this point to camera) to final color
+                    sample_color += albedo * material.color.xyz;
+                    break;
                 } else { // ray goes to infinity
                     sample_color += albedo * getBackgroundColor(ray);
                     break;
+
                 }
             }
         }

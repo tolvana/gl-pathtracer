@@ -6,20 +6,25 @@
 struct gl_Intersectable {
 
     glm::vec4 a, b, c;
-    int type, material_idx, pad0, pad1;
+    int type, material_idx;
+
+    int pad0, pad1; // padding for std430 layout compatibility
 
 };
 
 struct gl_Material {
 
-    glm::vec4 albedo, illuminance;
-    float diffusivity, ref_idx;
+    glm::vec4 color;
+    float fuzz, ref_idx;
+    int type;
+
+    int pad0; // padding for std430 layout compatibility
 
 };
 
 struct PathTracerParams {
     int nx, ny, spp; // output resolution, samples per pixel
-    int pad0; // padding to conform with std140 layout
+    int pad0; // padding for std140 layout compatibility
     glm::vec4 camPos, camDir, camUp, camRight; // camera position and orientation
 
     int recursion_depth;
