@@ -1,16 +1,23 @@
 #include "scene.hpp"
 
 Scene::Scene() {
+    gl_Material mat = {
+                       .albedo = glm::vec4(0.5),
+                       .illuminance = glm::vec4(0.0),
+                       .diffusivity = 1.0,
+                       .ref_idx = 1.0
+    };
+
+    materials_.push_back(mat);
 
     gl_Intersectable sphere = {
                                .a = glm::vec4(5, 0, 0, 0),
                                .b = glm::vec4(0.5, 0, 0, 0),
                                .c = glm::vec4(0.0, 0, 0, 1),
-                               .albedo = glm::vec4(0.5, 0.5, 0.5, 1),
-                               .refIdx = 0.5,
-                               .diffusivity = 1.0,
                                .type = 0,
+                               .material_idx = 0 // refers to gl_Material mat
     };
+
     objects_.push_back(sphere);
 
     params_ = {.nx = 1368,

@@ -6,9 +6,14 @@
 struct gl_Intersectable {
 
     glm::vec4 a, b, c;
-    glm::vec4 albedo;
-    float refIdx, diffusivity;
-    int type;
+    int type, material_idx;
+
+};
+
+struct gl_Material {
+
+    glm::vec4 albedo, illuminance;
+    float diffusivity, ref_idx;
 
 };
 
@@ -34,12 +39,14 @@ class Scene {
         int getFrameHeight() const {return params_.ny;}
         int getSamplesPerPixel() const {return params_.spp;}
         std::vector<gl_Intersectable> getObjects() const {return objects_;}
+        std::vector<gl_Material> getMaterials() const {return materials_;}
         PathTracerParams getParams() const {return params_;}
 
 
 
     private:
         std::vector<gl_Intersectable> objects_;
+        std::vector<gl_Material> materials_;
         PathTracerParams params_;
 
 };

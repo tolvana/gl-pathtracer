@@ -135,8 +135,9 @@ PathTracer::PathTracer() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-    glGenBuffers(1, &paramsbuffer_);
     glGenBuffers(1, &objectbuffer_);
+    glGenBuffers(1, &materialbuffer_);
+    glGenBuffers(1, &paramsbuffer_);
 
     glGenBuffers(1, &quadbuffer_);
     glBindBuffer(GL_ARRAY_BUFFER, quadbuffer_);
@@ -148,6 +149,7 @@ PathTracer::PathTracer() {
 PathTracer::~PathTracer() {
 
     glDeleteBuffers(1, &objectbuffer_);
+    glDeleteBuffers(1, &materialbuffer_);
     glDeleteBuffers(1, &paramsbuffer_);
     glDeleteBuffers(1, &quadbuffer_);
 
@@ -157,8 +159,6 @@ PathTracer::~PathTracer() {
     glDeleteProgram(draw_program_id_);
 
 }
-
-
 
 void PathTracer::setScene(const Scene& scene) {
 
@@ -182,6 +182,11 @@ void PathTracer::setScene(const Scene& scene) {
     glBufferData(GL_SHADER_STORAGE_BUFFER, scene.getObjects().size() * sizeof(gl_Intersectable),
                  scene.getObjects().data(), GL_STATIC_DRAW);
 
+    // Upload scene materials
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialbuffer_);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, scene.getMaterials().size() * sizeof(gl_Material),
+                 scene.getMaterials().data(), GL_STATIC_DRAW);
+
     // Upload scene parameters
     PathTracerParams params = scene.getParams();
     glBindBuffer(GL_UNIFORM_BUFFER, paramsbuffer_);
@@ -194,7 +199,8 @@ void PathTracer::render() {
 
     glUseProgram(pt_program_id_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, objectbuffer_);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 2, paramsbuffer_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, materialbuffer_);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 3, paramsbuffer_);
     glDispatchCompute(nof_workgroups_.x, nof_workgroups_.y, nof_workgroups_.z);
     if (int err = glGetError() != GL_NO_ERROR) {
         std::cerr << "GL error: " << err << std::endl;

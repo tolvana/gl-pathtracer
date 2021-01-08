@@ -24,11 +24,12 @@ private:
 
     GLuint pt_program_id_;
     GLuint draw_program_id_;
-    GLuint sampler_id_;
 
     GLuint output_texture_;
 
     GLuint objectbuffer_;
+    GLuint materialbuffer_;
+
     GLuint paramsbuffer_;
     GLuint quadbuffer_;
 

@@ -21,10 +21,15 @@ struct Intersectable {
     // Interpretation of data depends on the type parameter,
     // see intersect method for details.
     vec4 a, b, c;
-    vec4 albedo;
-    float refIdx, diffusivity;
 
-    int type;
+    int type, material_idx;
+
+};
+
+struct Material {
+
+    vec4 albedo, illuminance;
+    float diffusivity, ref_idx;
 
 };
 
@@ -38,21 +43,26 @@ struct IntersectResult {
     float t;
     vec3 normal;
     vec3 point;
+    int material_idx;
 
-    vec3 albedo;
-    float refIdx, diffusivity;
 };
 
 
 // input scene specifications
-layout (std430, binding=1) buffer scene {
+layout (std430, binding = 1) buffer scene_objects {
 
-	Intersectable objects[];
+    Intersectable objects[];
+
+};
+
+layout (std430, binding = 2) buffer scene_materials {
+
+    Material materials[];
 
 };
 
 // parameters
-layout(std140, binding=2) uniform params {
+layout(std140, binding = 3) uniform params {
 
     int nx, ny, spp; // output resolution, samples per pixel
     vec4 camPos, camDir, camUp, camRight; // camera position and orientation
@@ -125,7 +135,7 @@ IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
             res.t = x;
             res.point = ray.origin + x * ray.direction;
             res.normal = normalize(res.point - center);
-            res.albedo = obj.albedo.xyz;
+            res.material_idx = obj.material_idx;
         }
 
     } else if (obj.type == TRIANGLE_TYPE) { // Triangle intersection
@@ -180,7 +190,11 @@ void main() {
     if (all(lessThan(global_id, ivec3(nx, ny, spp)))) {
 
         Ray ray = generateRay(global_id.xy, ivec2(nx, ny)); // Initial (camera) ray
-        vec3 sample_color = vec3(1.0); // Initial color
+
+        vec3 sample_color = vec3(0.0);
+
+        // total albedo from current position to camera
+        vec3 albedo = vec3(1.0);
 
         IntersectResult best, candidate;
 
@@ -190,7 +204,7 @@ void main() {
             best.hit = false;
             best.t = tmax;
 
-            for (int i = 0; i < nof_objects; i++) {
+            for (int i = 0; i < nof_objects; i++) { // Find closest intersection
 
                 candidate = intersect(ray, objects[i], tmin, tmax);
 
@@ -199,11 +213,20 @@ void main() {
                 }
             }
 
-            if (best.hit) {
-                sample_color *= best.albedo.xyz;
+            if (best.hit) { // ray hits an object
+                Material mat = materials[best.material_idx];
+
+                // Add illuminant contribution of this material (multiplied
+                // by the total albedo from this point to camera) to final color
+                sample_color += albedo * mat.illuminance.xyz;
+
+                // Stack contribution of this material with the total albedo
+                albedo *= mat.albedo.xyz;
+
                 ray = scatter(ray, best);
-            } else {
-                sample_color *= getBackgroundColor(ray);
+
+            } else { // ray goes to infinity
+                sample_color += albedo * getBackgroundColor(ray);
                 break;
             }
         }
