@@ -9,8 +9,6 @@
 
 #include "pathtracer.hpp"
 
-#include "shaders.hpp"
-
 using glm::vec3;
 
 const float quad_vertices[] = {-1, -1, 0,
