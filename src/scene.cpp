@@ -10,19 +10,28 @@ Scene::Scene() {
 
     materials_.push_back(mat);
 
-    gl_Intersectable sphere = {
-                               .a = glm::vec4(5, 0, 0, 0),
-                               .b = glm::vec4(0.5, 0, 0, 0),
+    gl_Intersectable small_lambertian_sphere = {
+                               .a = glm::vec4(4, 0, 0, 0),
+                               .b = glm::vec4(1.0, 0, 0, 0),
                                .c = glm::vec4(0.0, 0, 0, 1),
                                .type = 0,
                                .material_idx = 0 // refers to gl_Material mat
     };
 
-    objects_.push_back(sphere);
+    gl_Intersectable huge_lambertian_sphere = {
+                               .a = glm::vec4(0, 0, -5001, 0),
+                               .b = glm::vec4(5000, 0, 0, 0),
+                               .c = glm::vec4(0.0, 0, 0, 1),
+                               .type = 0,
+                               .material_idx = 0 // refers to gl_Material mat
+    };
 
-    params_ = {.nx = 1368,
-               .ny = 768,
-               .spp = 8,
+    objects_.push_back(small_lambertian_sphere);
+    objects_.push_back(huge_lambertian_sphere);
+
+    params_ = {.nx = 1920,
+               .ny = 1080,
+               .spp = 256,
                .camPos = glm::vec4(0.0, 0.0, 0.0, 0),
                .camDir = glm::vec4(1.0, 0.0, 0.0, 0),
                .camUp = 2 * (float)std::tan(90 * M_PI/360) / 1368 * glm::vec4(.0, .0, 1.0, 0),
@@ -30,7 +39,7 @@ Scene::Scene() {
                .recursion_depth = 10,
                .tmin = 1e0f,
                .tmax = 1e8f,
-               .nof_objects = 1,
+               .nof_objects = (int)objects_.size(),
                .seed = 1
               };
 }

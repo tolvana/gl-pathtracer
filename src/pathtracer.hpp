@@ -3,9 +3,9 @@
 
 #include "scene.hpp"
 
-#define SIZE_X 8
-#define SIZE_Y 8
-#define SIZE_Z 8
+#define SIZE_X 2
+#define SIZE_Y 2
+#define SIZE_Z 64
 
 class PathTracer {
 public:

@@ -1,8 +1,8 @@
 #version 460 core
 // Thread block dimensions
-#define SIZE_X 8
-#define SIZE_Y 8
-#define SIZE_Z 8
+#define SIZE_X 2
+#define SIZE_Y 2
+#define SIZE_Z 64
 
 // Intersectable types
 #define SPHERE_TYPE 0
@@ -153,6 +153,8 @@ Ray scatter(Ray incoming, IntersectResult intersect) {
     // lambertian scattering
     ray.direction = normalize(intersect.normal + sampleSphere());
     return ray;
+
+
 }
 
 vec3 getBackgroundColor(Ray ray) {
@@ -189,50 +191,52 @@ void main() {
 
     if (all(lessThan(global_id, ivec3(nx, ny, spp)))) {
 
-        Ray ray = generateRay(global_id.xy, ivec2(nx, ny)); // Initial (camera) ray
+        IntersectResult best, candidate;
 
         vec3 sample_color = vec3(0.0);
 
-        // total albedo from current position to camera
-        vec3 albedo = vec3(1.0);
+        for (int sid = z; sid < spp; sid+=SIZE_Z) { // loop over samples
 
-        IntersectResult best, candidate;
+            // Initial (camera) ray
+            Ray ray = generateRay(global_id.xy, ivec2(nx, ny));
 
+            // total albedo from current position to camera
+            vec3 albedo = vec3(1.0);
 
-        for (int d = 0; d < recursion_depth; d++) {
+            for (int d = 0; d < recursion_depth; d++) {
 
-            best.hit = false;
-            best.t = tmax;
+                best.hit = false;
+                best.t = tmax;
 
-            for (int i = 0; i < nof_objects; i++) { // Find closest intersection
+                for (int i = 0; i < nof_objects; i++) { // find closest intersection
 
-                candidate = intersect(ray, objects[i], tmin, tmax);
+                    candidate = intersect(ray, objects[i], tmin, tmax);
 
-                if (candidate.hit && candidate.t < best.t) {
-                    best = candidate;
+                    if (candidate.hit && candidate.t < best.t) {
+                        best = candidate;
+                    }
                 }
-            }
 
-            if (best.hit) { // ray hits an object
-                Material mat = materials[best.material_idx];
+                if (best.hit) { // ray hits an object
+                    Material mat = materials[best.material_idx];
 
-                // Add illuminant contribution of this material (multiplied
-                // by the total albedo from this point to camera) to final color
-                sample_color += albedo * mat.illuminance.xyz;
+                    // Add illuminant contribution of this material (multiplied
+                    // by the total albedo from this point to camera) to final color
+                    sample_color += albedo * mat.illuminance.xyz;
 
-                // Stack contribution of this material with the total albedo
-                albedo *= mat.albedo.xyz;
+                    // Stack contribution of this material with the total albedo
+                    albedo *= mat.albedo.xyz;
 
-                ray = scatter(ray, best);
+                    ray = scatter(ray, best);
 
-            } else { // ray goes to infinity
-                sample_color += albedo * getBackgroundColor(ray);
-                break;
+                } else { // ray goes to infinity
+                    sample_color += albedo * getBackgroundColor(ray);
+                    break;
+                }
             }
         }
 
         samples[idx] = sample_color;
-
         barrier(); // synchronize writing to shared memory
 
         if (z==0) { // zeroth sampler of each pixel writes to output
@@ -240,7 +244,7 @@ void main() {
             for (int i = 1; i < nof_samples; i++) {
                 samples[idx] += samples[idx + i];
             }
-            imageStore(output_image, global_id.xy, vec4(samples[idx]/nof_samples, 1.0));
+            imageStore(output_image, global_id.xy, vec4(samples[idx]/spp, 1.0));
         }
     }
 }

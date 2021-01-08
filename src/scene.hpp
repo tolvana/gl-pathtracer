@@ -6,7 +6,7 @@
 struct gl_Intersectable {
 
     glm::vec4 a, b, c;
-    int type, material_idx;
+    int type, material_idx, pad0, pad1;
 
 };
 
