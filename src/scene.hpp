@@ -32,8 +32,8 @@ struct PathTracerParams {
     float tmin, tmax;
 
     int nof_objects;
-
     int seed;
+
 };
 
 class Scene {

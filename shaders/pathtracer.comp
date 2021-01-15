@@ -1,9 +1,9 @@
 #version 460 core
 
 // Thread block dimensions
-#define SIZE_X 2
-#define SIZE_Y 2
-#define SIZE_Z 64
+#define SIZE_X 16
+#define SIZE_Y 16
+#define SIZE_Z 1
 
 // Intersectable types
 #define SPHERE 0
@@ -87,8 +87,10 @@ layout(std140, binding = 3) uniform params {
 
 };
 
+uniform int nof_samples;
+
 // shared array to store the result of each sampler thread of each pixel.
-shared vec3 samples[SIZE_X * SIZE_Y * SIZE_Z];
+shared vec3 samples[SIZE_X][SIZE_Y][SIZE_Z];
 
 // PRNG state for each thread
 shared uint randomState[SIZE_X][SIZE_Y][SIZE_Z];
@@ -112,10 +114,9 @@ float rand() {
     return new * (1.0/float(0xffffffffU));
 }
 
-// sample a random point from a unit sphere.
 vec3 sampleSphere() {
-    float theta = 2 * M_PI * rand();
-    float psi = 2 * M_PI * (rand() - 0.5);
+    float theta = 2 * M_PI * rand(); // azimuth (uniform)
+    float psi =  acos(1.0 -  2*rand()); // inclination (uniform cosine)
     float r = sin(psi);
     return vec3(r * cos(theta), r * sin(theta), cos(psi));
 }
@@ -127,30 +128,59 @@ IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
     res.hit = false;
 
     if (obj.type == SPHERE) { // Sphere intersection
-        vec3 center = vec3(obj.a);
+        vec3 center = obj.a.xyz;
         float radius = obj.b.x;
 
         vec3 RC = ray.origin - center;
         float b = 2 * dot(ray.direction, RC);
         float c = dot(RC, RC) - radius * radius;
         float D = b * b - 4 * c;
-        float x = 0;
+        float t = 0;
 
         if (D > 0) {
-            x = (-b - sqrt(D)) / 2; // smaller of the two roots
-            x = (x > tmin)? x: c/x; // choose larger root if the smaller is behind camera
+            t = (-b - sqrt(D)) / 2; // smaller of the two roots
+            t = (t > tmin)? t: c/t; // choose larger root if the smaller is behind camera
         }
 
-        if (x > tmin) {
+        if (t > tmin) {
             res.hit = true;
-            res.t = x;
-            res.point = ray.origin + x * ray.direction;
+            res.t = t;
+            res.point = ray.origin + t * ray.direction;
             res.material_idx = obj.material_idx;
             res.normal = normalize(res.point - center);
             res.normal = (dot(res.normal, ray.direction) > 0.0)? -res.normal: res.normal;
         }
 
-    } else if (obj.type == TRIANGLE) { // Triangle intersection
+    } else if (obj.type == TRIANGLE) {
+        // Triangle intersection (somewhat less efficient than Möller-Trumbore)
+        //
+        vec3 e_ba = obj.b.xyz - obj.a.xyz;
+        vec3 e_ca = obj.c.xyz - obj.a.xyz;
+
+        vec3 p = obj.a.xyz;
+
+        vec3 n = cross(e_ba, e_ca);
+        float a = dot(ray.direction, n);
+
+        if (a == 0) return res;
+        vec3 nc = cross(n, e_ca);
+
+        float t = dot(p - ray.origin, n) / a;
+
+        vec3 point = ray.origin + t * ray.direction;
+        vec3 puv = point - p;
+        float u = dot(puv, nc) / dot(e_ba, nc);
+        if (u < 0.0 || u > 1.0) return res;
+        float v = dot(puv - u*e_ba, e_ca) / dot(e_ca, e_ca);
+        if (v < 0.0 || (u + v > 1.0)) return res;
+
+        if (t > tmin) {
+            res.hit = true;
+            res.t = t;
+            res.point = point;
+            res.material_idx = obj.material_idx;
+            res.normal = (dot(ray.direction, n) < 0.0)? normalize(n): -normalize(n);
+        }
 
     }
 
@@ -171,8 +201,8 @@ Ray scatter(Ray incoming, IntersectResult intersect) {
 
     } else if (material.type == METAL) {
 
-        ray.direction = normalize(reflect(incoming.direction,
-                                          intersect.normal) + material.fuzz * sampleSphere());
+        ray.direction = normalize(reflect(incoming.direction, intersect.normal)
+                                  + material.fuzz * sampleSphere());
 
     } else if (material.type == DIELECTRIC) {
 
@@ -205,8 +235,8 @@ Ray scatter(Ray incoming, IntersectResult intersect) {
 vec3 getBackgroundColor(Ray ray) {
 
     const vec3 up = vec3(0, 0, 1);
-    const vec3 upColor = vec3(0.5, 0.5, 1.0);
-    const vec3 downColor = vec3(1.5, 1.5, 1.0);
+    const vec3 upColor = vec3(0.0, 0.0, 0.0);
+    const vec3 downColor = vec3(0.0, 0.0, 0.0);
 
     float t = 0.5 * (dot(ray.direction, up) + 1);
     return t*upColor + (1-t)*downColor;
@@ -234,9 +264,9 @@ void main() {
     int x = int(gl_LocalInvocationID.x);
     int y = int(gl_LocalInvocationID.y);
     int z = int(gl_LocalInvocationID.z);
-    int idx = x * SIZE_Y * SIZE_Z + y * SIZE_Z + z; // 1D local thread index
+    samples[x][y][z] = vec3(0.0);
     // initialize PRNG state
-    randomState[x][y][z] = seed;
+    randomState[x][y][z] = nof_samples + seed;
 
     ivec3 global_id = ivec3(gl_GlobalInvocationID.xyz); // global thread index
 
@@ -246,59 +276,59 @@ void main() {
 
         vec3 sample_color = vec3(0.0);
 
-        for (int sid = z; sid < spp; sid+=SIZE_Z) { // loop over samples
 
-            // Initial (camera) ray
-            Ray ray = generateRay(global_id.xy, ivec2(nx, ny));
+        // Initial (camera) ray
+        Ray ray = generateRay(global_id.xy, ivec2(nx, ny));
 
-            // total albedo from current position to camera
-            vec3 albedo = vec3(1.0);
+        // total albedo from current position to camera
+        vec3 albedo = vec3(1.0);
 
-            for (int d = 0; d < recursion_depth; d++) {
+        for (int d = 0; d < recursion_depth; d++) {
 
-                best.hit = false;
-                best.t = tmax;
+            best.hit = false;
+            best.t = tmax;
 
-                for (int i = 0; i < nof_objects; i++) { // find closest intersection
+            for (int i = 0; i < nof_objects; i++) { // find closest intersection
 
-                    candidate = intersect(ray, objects[i], tmin, tmax);
+                candidate = intersect(ray, objects[i], tmin, tmax);
 
-                    if (candidate.hit && candidate.t < best.t) {
-                        best = candidate;
-                    }
+                if (candidate.hit && candidate.t < best.t) {
+                    best = candidate;
                 }
+            }
 
-                Material material = materials[best.material_idx];
+            Material material = materials[best.material_idx];
 
-                if (best.hit && material.type != EMISSIVE) { // ray is scattered
+            if (best.hit && material.type != EMISSIVE) { // ray is scattered
 
-                    // Stack contribution of this material with the total albedo
-                    albedo *= material.color.xyz;
+                // Stack contribution of this material with the total albedo
+                albedo *= material.color.xyz;
 
-                    ray = scatter(ray, best);
+                ray = scatter(ray, best);
 
-                } else if (material.type == EMISSIVE) { // ray is absorbed by a black body
-                    // Add illuminant contribution of this material (multiplied
-                    // by the total albedo from this point to camera) to final color
-                    sample_color += albedo * material.color.xyz;
-                    break;
-                } else { // ray goes to infinity
-                    sample_color += albedo * getBackgroundColor(ray);
-                    break;
+            } else if (material.type == EMISSIVE) { // ray is absorbed by a black body
+                // Add illuminant contribution of this material (multiplied
+                // by the total albedo from this point to camera) to final color
+                sample_color += albedo * material.color.xyz;
+                break;
+            } else { // ray goes to infinity
+                sample_color += albedo * getBackgroundColor(ray);
+                break;
 
-                }
             }
         }
 
-        samples[idx] = sample_color;
+        samples[x][y][z] = sample_color/SIZE_Z;
         barrier(); // synchronize writing to shared memory
 
         if (z==0) { // zeroth sampler of each pixel writes to output
-            int nof_samples = min(SIZE_Z, spp - global_id.z);
-            for (int i = 1; i < nof_samples; i++) {
-                samples[idx] += samples[idx + i];
+            for (int i = 1; i < SIZE_Z; i++) {
+                samples[x][y][0] += samples[x][y][i];
             }
-            imageStore(output_image, global_id.xy, vec4(samples[idx]/spp, 1.0));
+            vec4 old = imageLoad(output_image, global_id.xy);
+            imageStore(output_image, global_id.xy,
+                       (vec4(samples[x][y][0], 0.0)
+                        + (nof_samples) * old) / (nof_samples + 1));
         }
     }
 }

@@ -3,9 +3,9 @@
 
 #include "scene.hpp"
 
-#define SIZE_X 2
-#define SIZE_Y 2
-#define SIZE_Z 64
+#define SIZE_X 16
+#define SIZE_Y 16
+#define SIZE_Z 1
 
 class PathTracer {
 public:
@@ -14,11 +14,15 @@ public:
     ~PathTracer();
 
     void setScene(const Scene&);
-    void render();
-    void display();
-
+    bool shouldSample();
+    void sample();
+    void draw();
+    int nof_samples_;
+    int max_samples_;
 
 private:
+
+
 
     glm::vec3 nof_workgroups_;
 

@@ -24,7 +24,7 @@ Scene::Scene() {
     };
 
     gl_Material plasma = {
-                       .color = glm::vec4(2.0),
+                       .color = glm::vec4(4.0),
                        .type = 3
     };
 
@@ -36,7 +36,7 @@ Scene::Scene() {
 
     gl_Intersectable huge_lambertian_sphere = {
                                .a = glm::vec4(0, 0, -5001, 0),
-                               .b = glm::vec4(5000, 0, 0, 0),
+                               .b = glm::vec4(4997, 0, 0, 0),
                                .c = glm::vec4(0.0, 0, 0, 1),
                                .type = 0, // sphere
                                .material_idx = 0 // grey lambertian
@@ -58,13 +58,6 @@ Scene::Scene() {
                                .material_idx = 2 // copper
     };
 
-    gl_Intersectable glass_sphere = {
-                               .a = glm::vec4(0, 0, 3, 0),
-                               .b = glm::vec4(2, 0, 0, 0),
-                               .c = glm::vec4(0.0, 0, 0, 1),
-                               .type = 0, // sphere
-                               .material_idx = 3 // glass
-    };
 
     gl_Intersectable plasma_sphere = {
                                .a = glm::vec4(3, 0, 2, 0),
@@ -74,23 +67,141 @@ Scene::Scene() {
                                .material_idx = 4 // plasma
     };
 
+    gl_Intersectable bottom_0 = {
+                               .a = glm::vec4(0,  3, -3, 0),
+                               .b = glm::vec4(0, -3, -3, 0),
+                               .c = glm::vec4(5,  3, -3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable bottom_1 = {
+                               .a = glm::vec4(5,  3, -3, 0),
+                               .b = glm::vec4(5, -3, -3, 0),
+                               .c = glm::vec4(0, -3, -3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable top_0 = {
+                               .a = glm::vec4(0,  3, 3, 0),
+                               .b = glm::vec4(0, -3, 3, 0),
+                               .c = glm::vec4(5,  3, 3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable top_1 = {
+                               .a = glm::vec4(5,  3, 3, 0),
+                               .b = glm::vec4(5, -3, 3, 0),
+                               .c = glm::vec4(0, -3, 3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable left_0 = {
+                               .a = glm::vec4(0,  3, -3, 0),
+                               .b = glm::vec4(0,  3,  3, 0),
+                               .c = glm::vec4(5,  3, -3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable left_1 = {
+                               .a = glm::vec4(5,  3,  3, 0),
+                               .b = glm::vec4(0,  3,  3, 0),
+                               .c = glm::vec4(5,  3, -3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable right_0 = {
+                               .a = glm::vec4(0, -3, -3, 0),
+                               .b = glm::vec4(0, -3,  3, 0),
+                               .c = glm::vec4(5, -3, -3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable right_1 = {
+                               .a = glm::vec4(5, -3,  3, 0),
+                               .b = glm::vec4(0, -3,  3, 0),
+                               .c = glm::vec4(5, -3, -3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable back_0 = {
+                               .a = glm::vec4(5, -3, -3, 0),
+                               .b = glm::vec4(5, -3,  3, 0),
+                               .c = glm::vec4(5,  3,  3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+
+    gl_Intersectable back_1 = {
+                               .a = glm::vec4(5, -3, -3, 0),
+                               .b = glm::vec4(5,  3, -3, 0),
+                               .c = glm::vec4(5,  3,  3, 1),
+                               .type = 1, // triangle
+                               .material_idx = 0 // grey lambertian
+
+    };
+    gl_Intersectable light_0 = {
+                               .a = glm::vec4(1.5,  1.5, 2.99, 0),
+                               .b = glm::vec4(1.5, -1.5, 2.99, 0),
+                               .c = glm::vec4(3.5,  1.5, 2.99, 1),
+                               .type = 1, // triangle
+                               .material_idx = 4 // grey lambertian
+
+    };
+
+    gl_Intersectable light_1 = {
+                               .a = glm::vec4(3.5,  1.5, 2.99, 0),
+                               .b = glm::vec4(3.5, -1.5, 2.99, 0),
+                               .c = glm::vec4(1.5, -1.5, 2.99, 1),
+                               .type = 1, // triangle
+                               .material_idx = 4 // grey lambertian
+
+    };
+
     objects_.push_back(small_lambertian_sphere);
-    objects_.push_back(huge_lambertian_sphere);
+    //objects_.push_back(huge_lambertian_sphere);
     objects_.push_back(copper_sphere);
-    objects_.push_back(glass_sphere);
-    objects_.push_back(plasma_sphere);
+    //objects_.push_back(plasma_sphere);
+    objects_.push_back(bottom_0);
+    objects_.push_back(bottom_1);
+    objects_.push_back(top_0);
+    objects_.push_back(top_1);
+    objects_.push_back(left_0);
+    objects_.push_back(left_1);
+    objects_.push_back(right_0);
+    objects_.push_back(right_1);
+    objects_.push_back(back_0);
+    objects_.push_back(back_1);
+    objects_.push_back(light_0);
+    objects_.push_back(light_1);
 
     params_ = {.nx = 1920,
                .ny = 1080,
-               .spp = 64,
-               .camPos = glm::vec4(-3.0, 0.0, 0.0, 0),
+               .spp = 1024,
+               .camPos = glm::vec4(-5.0, 0.0, 0.0, 0),
                .camDir = glm::vec4(1.0, 0.0, 0.0, 0),
-               .camUp = 2 * (float)std::tan(60 * M_PI/360) / 1368 * glm::vec4(.0, .0, 1.0, 0),
-               .camRight = 2 * (float)std::tan(60 * M_PI/360) / 1368 * glm::vec4(0, -1, 0, 0),
-               .aperture = 0.1,
+               .camUp = 2 * (float)std::tan(75 * M_PI/360) / 1368 * glm::vec4(.0, .0, 1.0, 0),
+               .camRight = 2 * (float)std::tan(75 * M_PI/360) / 1368 * glm::vec4(0, -1, 0, 0),
+               .aperture = 0.0,
                .focal_distance = 6.0,
                .recursion_depth = 10,
-               .tmin = 2e-2f,
+               .tmin = 2e-3f,
                .tmax = 1e8f,
                .nof_objects = (int)objects_.size(),
                .seed = rand()

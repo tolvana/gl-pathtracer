@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "pathtracer.hpp"
 #include "windowcontext.hpp"
 
@@ -10,13 +12,18 @@ int main (int argc, const char ** argv) {
 
     PathTracer pathtracer;
     pathtracer.setScene(scene);
-    pathtracer.render();
 
     window.display();
 
     while (window.pollEvent()) {
+
+
+        if (pathtracer.shouldSample()) {
+            pathtracer.sample();
+        }
+
         window.clear();
-        pathtracer.display();
+        pathtracer.draw();
         window.display();
     }
 

@@ -117,7 +117,7 @@ std::string readShaderSource(std::string path) {
 
 }
 
-PathTracer::PathTracer() {
+PathTracer::PathTracer(): nof_samples_(0), max_samples_(0) {
 
     // Load programs
     pt_program_id_ = loadComputeShader(readShaderSource("../shaders/pathtracer.comp"));
@@ -163,12 +163,11 @@ void PathTracer::setScene(const Scene& scene) {
     int nx = scene.getFrameWidth();
     int ny = scene.getFrameHeight();
     int spp = scene.getSamplesPerPixel();
+    max_samples_ = spp;
 
     // Resize output texture
-    std::vector<float> data(4*nx*ny);
-    std::generate(data.begin(), data.end(), [](){return (float)rand()/RAND_MAX;});
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0, GL_RGBA, GL_FLOAT, data.data());
+    std::vector<float> zeros(4*nx*ny, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, nx, ny, 0, GL_RGBA, GL_FLOAT, zeros.data());
     glBindImageTexture(0, output_texture_, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
     nof_workgroups_ = vec3((nx  + SIZE_X - 1) / SIZE_X,
@@ -193,20 +192,29 @@ void PathTracer::setScene(const Scene& scene) {
 
 }
 
-void PathTracer::render() {
+bool PathTracer::shouldSample() {return nof_samples_ < max_samples_;}
+
+void PathTracer::sample() {
 
     glUseProgram(pt_program_id_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, objectbuffer_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, materialbuffer_);
     glBindBufferBase(GL_UNIFORM_BUFFER, 3, paramsbuffer_);
-    glDispatchCompute(nof_workgroups_.x, nof_workgroups_.y, nof_workgroups_.z);
+
+    glUniform1i(glGetUniformLocation(pt_program_id_, "nof_samples"),
+                nof_samples_);
+
+    glDispatchCompute(nof_workgroups_.x, nof_workgroups_.y, 1);
+
     if (int err = glGetError() != GL_NO_ERROR) {
         std::cerr << "GL error: " << err << std::endl;
     }
 
+    nof_samples_++;
+
 }
 
-void PathTracer::display() {
+void PathTracer::draw() {
 
     // Make sure rendering has finished
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
