@@ -97,6 +97,7 @@ shared uint randomState[SIZE_X][SIZE_Y][SIZE_Z];
 
 const uint k = 1103515245U;  // GLIB C
 
+// hash function for generating pseudorandom uints
 uvec3 hash(uvec3 x) {
     x = ((x>>8U)^x.yzx)*k;
     x = ((x>>8U)^x.yzx)*k;
@@ -105,22 +106,36 @@ uvec3 hash(uvec3 x) {
     return x;
 }
 
-// sample a random real number from the interval [0, 1].
-float rand() {
+// sample a random vec3 from the uniform distribution [0, 1]^3.
+vec3 randVec() {
     uint s = randomState[gl_LocalInvocationID.x][gl_LocalInvocationID.y][gl_LocalInvocationID.z];
-
-    uint new = hash(gl_GlobalInvocationID.xyz * s).x;
-    randomState[gl_LocalInvocationID.x][gl_LocalInvocationID.y][gl_LocalInvocationID.z] = new;
+    uvec3 new = hash(gl_GlobalInvocationID.xyz * s);
+    randomState[gl_LocalInvocationID.x][gl_LocalInvocationID.y][gl_LocalInvocationID.z] = new.x;
     return new * (1.0/float(0xffffffffU));
 }
 
+// sample a random float from the uniform distribution [0, 1].
+float rand() { return randVec().x; }
+
+// sample a uniformly distributed vec3 from the unit sphere.
 vec3 sampleSphere() {
-    float theta = 2 * M_PI * rand(); // azimuth (uniform)
-    float psi =  acos(1.0 -  2*rand()); // inclination (uniform cosine)
+    vec3 rand = randVec();
+    float theta = 2 * M_PI * rand.x; // azimuth (uniform)
+    float psi =  acos(1.0 -  2*rand.y); // inclination (uniform cosine)
     float r = sin(psi);
     return vec3(r * cos(theta), r * sin(theta), cos(psi));
 }
 
+// sample a uniformly distributed vec3 from the unit ball.
+vec3 sampleBall() {
+    vec3 rand = randVec();
+    float theta = 2 * M_PI * rand.x; // azimuth (uniform)
+    float psi =  acos(1.0 -  2*rand.y); // inclination (uniform cosine)
+    float r = sqrt(rand.z); // radius (uniform square)
+    return vec3(r * cos(theta), r * sin(theta), cos(psi));
+}
+
+// Find intersection of ray and object between tmin and tmax.
 // Assumes ray direction is normalized.
 IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
 
@@ -137,9 +152,9 @@ IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
         float D = b * b - 4 * c;
         float t = 0;
 
-        if (D > 0) {
+        if (D >= 0) {
             t = (-b - sqrt(D)) / 2; // smaller of the two roots
-            t = (t > tmin)? t: c/t; // choose larger root if the smaller is behind camera
+            t = (t > tmin)? t: c/t; // choose larger root if the smaller is behind origin
         }
 
         if (t > tmin) {
@@ -188,9 +203,17 @@ IntersectResult intersect(Ray ray, Intersectable obj, float tmin, float tmax) {
 
 }
 
+vec3 refract_custom(vec3 uv, vec3 n, float eta) {
+    float cos_theta = dot(-uv, n);
+    vec3 r_out_perp =  eta * (uv + cos_theta*n);
+    vec3 r_out_parallel = -sqrt(abs(1.0 - dot(r_out_perp, r_out_perp))) * n;
+    return r_out_perp + r_out_parallel;
+}
+
 Ray scatter(Ray incoming, IntersectResult intersect) {
 
     Ray ray;
+    ray.inside = incoming.inside;
     ray.origin = intersect.point;
 
     Material material = materials[intersect.material_idx];
@@ -202,7 +225,7 @@ Ray scatter(Ray incoming, IntersectResult intersect) {
     } else if (material.type == METAL) {
 
         ray.direction = normalize(reflect(incoming.direction, intersect.normal)
-                                  + material.fuzz * sampleSphere());
+                                  + material.fuzz * sampleBall());
 
     } else if (material.type == DIELECTRIC) {
 
@@ -215,15 +238,15 @@ Ray scatter(Ray incoming, IntersectResult intersect) {
 
         // ray is reflected, either due to total internal reflection
         // or randomly due to nonzero reflection coefficient
-        if (ref_idx * sine > 1.0 || rand() < schlick) {
-            ray.direction = normalize(reflect(incoming.direction,
-                                              intersect.normal)
-                                      );
+        if (ref_idx * sine >= 1.0) {
+            ray.direction = reflect(incoming.direction,
+                                    intersect.normal
+                                    );
         } else {
-            ray.direction = normalize(refract(incoming.direction,
-                                              intersect.normal,
-                                              ref_idx)
-                                      );
+            ray.direction = refract(incoming.direction,
+                                    intersect.normal,
+                                    ref_idx
+                                    );
             ray.inside = !incoming.inside;
         }
     }
@@ -257,7 +280,6 @@ Ray generateRay(ivec2 coords, ivec2 size) {
 
     return ray;
 }
-
 
 void main() {
 
