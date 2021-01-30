@@ -1,3 +1,5 @@
+#include "pathtracer.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -7,7 +9,7 @@
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 
-#include "pathtracer.hpp"
+#include "shaders.hpp" // Shader source strings
 
 using glm::vec3;
 
@@ -102,27 +104,11 @@ GLuint loadGraphicsShaders(std::string vsource, std::string fsource) {
     return program_id;
 }
 
-std::string readShaderSource(std::string path) {
-    std::string source;
-    std::ifstream filestream(path, std::ios::in);
-    if (filestream.is_open()) {
-        std::stringstream sstr;
-	sstr << filestream.rdbuf();
-	source = sstr.str();
-	filestream.close();
-    } else {
-        std::exit(1);
-    }
-    return source;
-
-}
-
 PathTracer::PathTracer(): nof_samples_(0), max_samples_(0) {
 
     // Load programs
-    pt_program_id_ = loadComputeShader(readShaderSource("../shaders/pathtracer.comp"));
-    draw_program_id_ = loadGraphicsShaders(readShaderSource("../shaders/quad.vert"),
-                                           readShaderSource("../shaders/quad.frag"));
+    pt_program_id_ = loadComputeShader(pathtracer_comp);
+    draw_program_id_ = loadGraphicsShaders(quad_vert, quad_frag);
 
     // Generate and set up output texture
     glGenTextures(1, &output_texture_);
